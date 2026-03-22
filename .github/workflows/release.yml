@@ -1,0 +1,113 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.php'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read plugin version
+        id: version
+        shell: bash
+        run: |
+          version=$(php -r '
+          $files = preg_split("/\R+/", trim((string) shell_exec("git ls-files \"*.php\"")));
+          $plugins = array();
+
+          foreach ($files as $file) {
+              if (!is_string($file) || $file === "") {
+                  continue;
+              }
+
+              $contents = file_get_contents($file);
+              if ($contents === false) {
+                  continue;
+              }
+
+              if (!preg_match("/^\\s*\\*\\s*Plugin Name:\\s*(.+)$/mi", $contents)) {
+                  continue;
+              }
+
+              if (!preg_match("/^\\s*\\*\\s*Version:\\s*(.+)$/mi", $contents, $matches)) {
+                  fwrite(STDERR, "Version header not found in $file\n");
+                  exit(1);
+              }
+
+              $plugins[] = array(
+                  "file" => $file,
+                  "version" => trim($matches[1]),
+              );
+          }
+
+          if (count($plugins) !== 1) {
+              fwrite(STDERR, "Expected exactly one WordPress plugin entry file, found " . count($plugins) . "\n");
+              exit(1);
+          }
+
+          echo $plugins[0]["file"] . "\n";
+          echo $plugins[0]["version"];
+          ')
+
+          plugin_file=$(printf "%s\n" "$version" | sed -n '1p')
+          version=$(printf "%s\n" "$version" | sed -n '2p')
+
+          if [ -z "$plugin_file" ]; then
+            echo "Plugin entry file not detected" >&2
+            exit 1
+          fi
+
+          if [ -z "$version" ]; then
+            echo "Empty version detected" >&2
+            exit 1
+          fi
+
+          echo "plugin_file=$plugin_file" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether tag exists
+        id: tag
+        shell: bash
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create tag
+        if: steps.tag.outputs.exists == 'false'
+        shell: bash
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
