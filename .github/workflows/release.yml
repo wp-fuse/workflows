@@ -100,7 +100,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create tag
+      - name: Create release tag
         if: steps.tag.outputs.exists == 'false'
         shell: bash
         run: |
@@ -108,6 +108,16 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [ -f .gitmodules ]; then
+            git rm --cached -r inc/wp-github-updater || true
+            rm .gitmodules || echo "Sem .gitmodules"
+            rm -rf inc/wp-github-updater/.git || true
+            
+            git add inc/wp-github-updater
+            git commit -m "Build release $tag with embedded submodules"
+          fi
+          
           git tag -a "$tag" -m "Release $tag"
           git push origin "$tag"
 
