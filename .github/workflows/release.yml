@@ -40,11 +40,11 @@ jobs:
                   continue;
               }
 
-              if (!preg_match("/^\\s*\\*\\s*Plugin Name:\\s*(.+)$/mi", $contents)) {
+              if (!preg_match("/^\\s*(?:\\*\\s*)?Plugin Name:\\s*(.+)$/mi", $contents)) {
                   continue;
               }
 
-              if (!preg_match("/^\\s*\\*\\s*Version:\\s*(.+)$/mi", $contents, $matches)) {
+              if (!preg_match("/^\\s*(?:\\*\\s*)?Version:\\s*(.+)$/mi", $contents, $matches)) {
                   fwrite(STDERR, "Version header not found in $file\n");
                   exit(1);
               }
