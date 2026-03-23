@@ -110,16 +110,22 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           if [ -f .gitmodules ]; then
-            git rm --cached -r inc/wp-github-updater || true
-            rm .gitmodules || echo "Sem .gitmodules"
-            rm -rf inc/wp-github-updater/.git || true
             
-            git add inc/wp-github-updater
+            MODULES=$(git config --file .gitmodules --get-regexp path | awk '{ print $2 }')
+            
+            for MODULE in $MODULES; do
+              git rm --cached -r "$MODULE" || true
+              rm -rf "$MODULE/.git" || true
+              git add "$MODULE"
+            done
+            
+            rm .gitmodules || true
             git commit -m "Build release $tag with embedded submodules"
           fi
           
           git tag -a "$tag" -m "Release $tag"
           git push origin "$tag"
+
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
